@@ -94,3 +94,30 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+### `artifacts/locallink` (`@workspace/locallink`)
+
+**LocalLink** — a hyper-local services marketplace mobile app built with Expo React Native.
+
+- **Framework**: Expo SDK 53, Expo Router 6, React Native
+- **Navigation**: Bottom tabs (Home, Map, Requests, Messages, Profile) via Expo Router
+  - iOS 26+: Liquid glass NativeTabs (via `expo-router/unstable-native-tabs`)
+  - Other: Classic Tabs with BlurView background
+- **State**: Custom AppContext with AsyncStorage persistence (no backend)
+- **Design**: Deep navy primary (#1B3A6B), coral accent (#FF6B47), Inter font
+- **Key screens**:
+  - `app/(tabs)/index.tsx` — Home with search/filter/sections
+  - `app/(tabs)/map.tsx` — Map-based discovery (react-native-maps@1.18.0)
+  - `app/(tabs)/requests.tsx` — Request tracking with status tabs
+  - `app/(tabs)/messages.tsx` — Conversation list
+  - `app/(tabs)/profile.tsx` — User profile with stats/editing
+  - `app/(auth)/login.tsx`, `app/(auth)/register.tsx` — Auth flow
+  - `app/service/[id].tsx` — Service detail + booking modal with escrow
+  - `app/request/[id].tsx` — Request detail + status progression + review modal
+  - `app/chat/[id].tsx` — Real-time in-app chat
+  - `app/create-listing.tsx` — Provider listing creation
+  - `app/reviews/[providerId].tsx` — Reviews list with rating distribution
+- **Context**: `context/AppContext.tsx` — full CRUD for users, listings, requests, conversations, messages, reviews, notifications
+- **Seed data**: 6 provider listings (tutoring, tailoring, homefood, repair, cleaning, gardening) near NYC
+- **Important**: react-native-maps pinned at 1.18.0 (Expo Go compatibility). Do NOT add to app.json plugins array. Metro config has web shim in `shims/react-native-maps.web.js` for web bundling.
+- **Escrow**: Fully mocked — status cycles held → released (on completion) or refunded (on cancel)
