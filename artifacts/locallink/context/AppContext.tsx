@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { api, clearToken, setToken } from "../lib/api";
 
 export type UserRole = "seeker" | "provider";
 
@@ -122,6 +123,7 @@ export interface Review {
   seekerName: string;
   seekerAvatar?: string;
   listingId: string;
+  requestId?: string;
   rating: number;
   comment: string;
   createdAt: string;
@@ -146,20 +148,18 @@ export interface Notification {
 interface AppContextType {
   currentUser: UserProfile | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   listings: ServiceListing[];
   requests: ServiceRequest[];
   conversations: Conversation[];
   messages: Record<string, ChatMessage[]>;
   notifications: Notification[];
   reviews: Review[];
-  login: (user: UserProfile) => Promise<void>;
+  login: (user: UserProfile, token?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   addListing: (listing: ServiceListing) => Promise<void>;
-  updateListing: (
-    id: string,
-    updates: Partial<ServiceListing>
-  ) => Promise<void>;
+  updateListing: (id: string, updates: Partial<ServiceListing>) => Promise<void>;
   deleteListing: (id: string) => Promise<void>;
   createRequest: (request: ServiceRequest) => Promise<void>;
   updateRequest: (id: string, status: RequestStatus) => Promise<void>;
@@ -168,19 +168,139 @@ interface AppContextType {
   addReview: (review: Review) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   getUnreadNotificationCount: () => number;
+  refreshListings: () => Promise<void>;
+  refreshRequests: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
 }
 
-const AppContext = createContext<AppContextType | null>(null);
+function mapApiListing(l: any): ServiceListing {
+  return {
+    id: l.id,
+    providerId: l.providerId,
+    providerName: l.providerName,
+    providerRating: l.providerRating ?? 0,
+    title: l.title,
+    description: l.description,
+    category: l.category,
+    price: l.price,
+    priceType: l.priceType ?? "hourly",
+    location: l.location,
+    latitude: l.latitude,
+    longitude: l.longitude,
+    availability: l.availabilityDays ?? l.availability ?? [],
+    tags: l.tags ?? [],
+    isActive: l.isActive ?? true,
+    createdAt: l.createdAt ?? new Date().toISOString(),
+    reviewCount: l.reviewCount ?? 0,
+  };
+}
+
+function mapApiRequest(r: any): ServiceRequest {
+  return {
+    id: r.id,
+    listingId: r.listingId,
+    seekerId: r.seekerId,
+    providerId: r.providerId,
+    seekerName: r.seekerName,
+    providerName: r.providerName,
+    serviceTitle: r.serviceTitle,
+    serviceCategory: r.serviceCategory,
+    status: r.status,
+    message: r.message,
+    scheduledDate: r.scheduledDate ?? undefined,
+    price: r.price,
+    escrow: {
+      amount: r.escrowAmount ?? r.price,
+      status: r.escrowStatus ?? "held",
+      transactionId: r.escrowTransactionId ?? "",
+    },
+    createdAt: r.createdAt ?? new Date().toISOString(),
+    updatedAt: r.updatedAt ?? new Date().toISOString(),
+  };
+}
+
+function mapApiConversation(c: any): Conversation {
+  const participantIds: string[] = (c.participants ?? []).map((p: any) => p.userId);
+  const participantNames: Record<string, string> = {};
+  for (const p of c.participants ?? []) {
+    participantNames[p.userId] = p.userName;
+  }
+  return {
+    id: c.id,
+    requestId: c.requestId ?? undefined,
+    participantIds,
+    participantNames,
+    lastMessage: c.lastMessage ?? undefined,
+    lastMessageTime: c.lastMessageTime ?? undefined,
+    unreadCount: c.unreadCount ?? 0,
+  };
+}
+
+function mapApiMessage(m: any): ChatMessage {
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    text: m.text,
+    timestamp: m.createdAt ?? new Date().toISOString(),
+    read: m.isRead ?? false,
+  };
+}
+
+function mapApiReview(r: any): Review {
+  return {
+    id: r.id,
+    providerId: r.providerId,
+    seekerId: r.seekerId,
+    seekerName: r.seekerName,
+    listingId: r.listingId,
+    requestId: r.requestId,
+    rating: r.rating,
+    comment: r.comment,
+    createdAt: r.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function mapApiNotification(n: any): Notification {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    read: n.isRead ?? false,
+    createdAt: n.createdAt ?? new Date().toISOString(),
+    data: n.data ?? undefined,
+  };
+}
+
+function mapApiUser(u: any): UserProfile {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: u.phone ?? undefined,
+    role: u.role,
+    bio: u.bio ?? undefined,
+    location: u.location ?? undefined,
+    rating: u.rating ?? 0,
+    reviewCount: u.reviewCount ?? 0,
+    isVerified: u.isVerified ?? false,
+    joinedAt: u.joinedAt ?? u.createdAt ?? new Date().toISOString(),
+    completedJobs: u.completedJobs ?? 0,
+    earnings: u.earnings ?? 0,
+  };
+}
 
 const SEED_LISTINGS: ServiceListing[] = [
   {
-    id: "l1",
-    providerId: "p1",
+    id: "seed_l1",
+    providerId: "seed_p1",
     providerName: "Maria Santos",
     providerRating: 4.9,
     title: "Math & Science Tutoring",
-    description:
-      "Expert tutoring for K-12 and college students. Specialized in Algebra, Calculus, Physics, and Chemistry. Patient, experienced, and results-oriented.",
+    description: "Expert tutoring for K-12 and college students. Specialized in Algebra, Calculus, Physics, and Chemistry. Patient, experienced, and results-oriented.",
     category: "tutoring",
     price: 35,
     priceType: "hourly",
@@ -195,13 +315,12 @@ const SEED_LISTINGS: ServiceListing[] = [
     distance: 0.8,
   },
   {
-    id: "l2",
-    providerId: "p2",
+    id: "seed_l2",
+    providerId: "seed_p2",
     providerName: "Aisha Thompson",
     providerRating: 4.8,
     title: "Custom Tailoring & Alterations",
-    description:
-      "Professional tailor with 15 years of experience. Wedding dresses, suits, casual wear. Quick turnaround and perfect fit guaranteed.",
+    description: "Professional tailor with 15 years of experience. Wedding dresses, suits, casual wear. Quick turnaround and perfect fit guaranteed.",
     category: "tailoring",
     price: 50,
     priceType: "fixed",
@@ -216,13 +335,12 @@ const SEED_LISTINGS: ServiceListing[] = [
     distance: 1.2,
   },
   {
-    id: "l3",
-    providerId: "p3",
+    id: "seed_l3",
+    providerId: "seed_p3",
     providerName: "Priya Patel",
     providerRating: 4.95,
     title: "Authentic Home-Cooked Indian Meals",
-    description:
-      "Fresh, home-cooked authentic Indian cuisine. Meal prep, tiffin service, and catering for small events. Vegan and gluten-free options available.",
+    description: "Fresh, home-cooked authentic Indian cuisine. Meal prep, tiffin service, and catering for small events. Vegan and gluten-free options available.",
     category: "homefood",
     price: 15,
     priceType: "fixed",
@@ -237,13 +355,12 @@ const SEED_LISTINGS: ServiceListing[] = [
     distance: 2.1,
   },
   {
-    id: "l4",
-    providerId: "p4",
+    id: "seed_l4",
+    providerId: "seed_p4",
     providerName: "Carlos Rivera",
     providerRating: 4.7,
     title: "Home Repair & Handyman Services",
-    description:
-      "Licensed handyman with 10+ years experience. Plumbing, electrical, carpentry, painting, and general repairs. Licensed and insured.",
+    description: "Licensed handyman with 10+ years experience. Plumbing, electrical, carpentry, painting, and general repairs. Licensed and insured.",
     category: "repair",
     price: 75,
     priceType: "hourly",
@@ -258,13 +375,12 @@ const SEED_LISTINGS: ServiceListing[] = [
     distance: 3.5,
   },
   {
-    id: "l5",
-    providerId: "p5",
+    id: "seed_l5",
+    providerId: "seed_p5",
     providerName: "Sophie Chen",
     providerRating: 4.85,
     title: "Deep Cleaning & Organization",
-    description:
-      "Professional deep cleaning services. Move-in/move-out, weekly cleaning, and home organization. Eco-friendly products available.",
+    description: "Professional deep cleaning services. Move-in/move-out, weekly cleaning, and home organization. Eco-friendly products available.",
     category: "cleaning",
     price: 120,
     priceType: "fixed",
@@ -279,13 +395,12 @@ const SEED_LISTINGS: ServiceListing[] = [
     distance: 4.2,
   },
   {
-    id: "l6",
-    providerId: "p6",
+    id: "seed_l6",
+    providerId: "seed_p6",
     providerName: "James Wilson",
     providerRating: 4.6,
     title: "Garden & Lawn Care",
-    description:
-      "Complete garden care including lawn mowing, hedge trimming, planting, and seasonal clean-up. Transform your outdoor space.",
+    description: "Complete garden care including lawn mowing, hedge trimming, planting, and seasonal clean-up. Transform your outdoor space.",
     category: "gardening",
     price: 60,
     priceType: "hourly",
@@ -303,31 +418,32 @@ const SEED_LISTINGS: ServiceListing[] = [
 
 const SEED_REVIEWS: Review[] = [
   {
-    id: "r1",
-    providerId: "p1",
-    seekerId: "s1",
+    id: "seed_r1",
+    providerId: "seed_p1",
+    seekerId: "seed_s1",
     seekerName: "Alex Kim",
-    listingId: "l1",
+    listingId: "seed_l1",
     rating: 5,
-    comment:
-      "Maria is an incredible tutor! My son's grades improved dramatically. Highly recommended!",
+    comment: "Maria is an incredible tutor! My son's grades improved dramatically. Highly recommended!",
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
   {
-    id: "r2",
-    providerId: "p2",
-    seekerId: "s2",
+    id: "seed_r2",
+    providerId: "seed_p2",
+    seekerId: "seed_s2",
     seekerName: "Emma Davis",
-    listingId: "l2",
+    listingId: "seed_l2",
     rating: 5,
-    comment:
-      "Amazing work on my wedding dress alterations. Perfect fit, fast turnaround!",
+    comment: "Amazing work on my wedding dress alterations. Perfect fit, fast turnaround!",
     createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
   },
 ];
 
+const AppContext = createContext<AppContextType | null>(null);
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [listings, setListings] = useState<ServiceListing[]>(SEED_LISTINGS);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -336,115 +452,142 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(SEED_REVIEWS);
 
   useEffect(() => {
-    const loadData = async () => {
+    const init = async () => {
       try {
-        const [
-          storedUser,
-          storedListings,
-          storedRequests,
-          storedConvos,
-          storedMessages,
-          storedNotifications,
-          storedReviews,
-        ] = await Promise.all([
-          AsyncStorage.getItem("currentUser"),
-          AsyncStorage.getItem("listings"),
-          AsyncStorage.getItem("requests"),
-          AsyncStorage.getItem("conversations"),
-          AsyncStorage.getItem("messages"),
-          AsyncStorage.getItem("notifications"),
-          AsyncStorage.getItem("reviews"),
+        const user = await api.auth.me();
+        setCurrentUser(mapApiUser(user));
+        await Promise.all([
+          loadListings(),
+          loadRequests(),
+          loadConversations(),
+          loadNotifications(),
         ]);
-        if (storedUser) setCurrentUser(JSON.parse(storedUser));
-        if (storedListings) setListings(JSON.parse(storedListings));
-        if (storedRequests) setRequests(JSON.parse(storedRequests));
-        if (storedConvos) setConversations(JSON.parse(storedConvos));
-        if (storedMessages) setMessages(JSON.parse(storedMessages));
-        if (storedNotifications)
-          setNotifications(JSON.parse(storedNotifications));
-        if (storedReviews) setReviews(JSON.parse(storedReviews));
-      } catch {}
+      } catch {
+        setCurrentUser(null);
+        await loadListings();
+      } finally {
+        setIsLoading(false);
+      }
     };
-    loadData();
+    init();
   }, []);
 
-  const save = useCallback(async (key: string, value: unknown) => {
-    await AsyncStorage.setItem(key, JSON.stringify(value));
-  }, []);
+  const loadListings = async () => {
+    try {
+      const data = await api.listings.list();
+      if (data.length > 0) {
+        setListings(data.map(mapApiListing));
+      }
+    } catch {}
+  };
 
-  const login = useCallback(
-    async (user: UserProfile) => {
-      setCurrentUser(user);
-      await save("currentUser", user);
-    },
-    [save]
-  );
+  const loadRequests = async () => {
+    try {
+      const data = await api.requests.list();
+      setRequests(data.map(mapApiRequest));
+    } catch {}
+  };
+
+  const loadConversations = async () => {
+    try {
+      const data = await api.conversations.list();
+      setConversations(data.map(mapApiConversation));
+    } catch {}
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const data = await api.notifications.list();
+      setNotifications(data.map(mapApiNotification));
+    } catch {}
+  };
+
+  const login = useCallback(async (user: UserProfile, token?: string) => {
+    if (token) {
+      await setToken(token);
+    }
+    setCurrentUser(user);
+    try {
+      await Promise.all([loadListings(), loadRequests(), loadConversations(), loadNotifications()]);
+    } catch {}
+  }, []);
 
   const logout = useCallback(async () => {
     setCurrentUser(null);
-    await AsyncStorage.removeItem("currentUser");
+    await clearToken();
+    setRequests([]);
+    setConversations([]);
+    setMessages({});
+    setNotifications([]);
+    await loadListings();
   }, []);
 
-  const updateProfile = useCallback(
-    async (updates: Partial<UserProfile>) => {
-      if (!currentUser) return;
-      const updated = { ...currentUser, ...updates };
-      setCurrentUser(updated);
-      await save("currentUser", updated);
-    },
-    [currentUser, save]
-  );
+  const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
+    if (!currentUser) return;
+    try {
+      const updated = await api.auth.updateMe(updates);
+      setCurrentUser(mapApiUser(updated));
+    } catch {
+      setCurrentUser((prev) => prev ? { ...prev, ...updates } : prev);
+    }
+  }, [currentUser]);
 
-  const addListing = useCallback(
-    async (listing: ServiceListing) => {
-      const updated = [listing, ...listings];
-      setListings(updated);
-      await save("listings", updated);
-      const notif: Notification = {
-        id: Date.now().toString(),
-        type: "request_received",
-        title: "Listing Created",
-        body: `Your listing "${listing.title}" is now live!`,
-        read: false,
-        createdAt: new Date().toISOString(),
-      };
-      const updatedNotifs = [notif, ...notifications];
-      setNotifications(updatedNotifs);
-      await save("notifications", updatedNotifs);
-    },
-    [listings, notifications, save]
-  );
+  const addListing = useCallback(async (listing: ServiceListing) => {
+    try {
+      const created = await api.listings.create({
+        title: listing.title,
+        description: listing.description,
+        category: listing.category,
+        price: listing.price,
+        priceType: listing.priceType,
+        location: listing.location,
+        latitude: listing.latitude,
+        longitude: listing.longitude,
+        availabilityDays: listing.availability,
+        tags: listing.tags,
+      });
+      const mapped = mapApiListing(created);
+      setListings((prev) => [mapped, ...prev]);
+    } catch {
+      setListings((prev) => [listing, ...prev]);
+    }
+  }, []);
 
-  const updateListing = useCallback(
-    async (id: string, updates: Partial<ServiceListing>) => {
-      const updated = listings.map((l) =>
-        l.id === id ? { ...l, ...updates } : l
-      );
-      setListings(updated);
-      await save("listings", updated);
-    },
-    [listings, save]
-  );
+  const updateListing = useCallback(async (id: string, updates: Partial<ServiceListing>) => {
+    setListings((prev) => prev.map((l) => l.id === id ? { ...l, ...updates } : l));
+    try {
+      const apiUpdates: any = { ...updates };
+      if (updates.availability) {
+        apiUpdates.availabilityDays = updates.availability;
+        delete apiUpdates.availability;
+      }
+      await api.listings.update(id, apiUpdates);
+    } catch {}
+  }, []);
 
-  const deleteListing = useCallback(
-    async (id: string) => {
-      const updated = listings.filter((l) => l.id !== id);
-      setListings(updated);
-      await save("listings", updated);
-    },
-    [listings, save]
-  );
+  const deleteListing = useCallback(async (id: string) => {
+    setListings((prev) => prev.filter((l) => l.id !== id));
+    try {
+      await api.listings.delete(id);
+    } catch {}
+  }, []);
 
-  const createRequest = useCallback(
-    async (request: ServiceRequest) => {
-      const updated = [request, ...requests];
-      setRequests(updated);
-      await save("requests", updated);
+  const createRequest = useCallback(async (request: ServiceRequest) => {
+    try {
+      const created = await api.requests.create({
+        listingId: request.listingId,
+        providerId: request.providerId,
+        message: request.message,
+        scheduledDate: request.scheduledDate,
+        price: request.price,
+      });
+      const mapped = mapApiRequest(created);
+      setRequests((prev) => [mapped, ...prev]);
 
-      const convId = `conv_${request.id}`;
+      const convId = `conv_${created.id}`;
       const newConv: Conversation = {
         id: convId,
-        requestId: request.id,
+        requestId: created.id,
         participantIds: [request.seekerId, request.providerId],
         participantNames: {
           [request.seekerId]: request.seekerName,
@@ -452,180 +595,98 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
         unreadCount: 0,
       };
-      const updatedConvs = [newConv, ...conversations];
-      setConversations(updatedConvs);
-      await save("conversations", updatedConvs);
+      setConversations((prev) => [newConv, ...prev]);
+    } catch {
+      setRequests((prev) => [request, ...prev]);
+    }
+  }, []);
 
-      const notif: Notification = {
-        id: Date.now().toString(),
-        type: "request_received",
-        title: "New Service Request",
-        body: `You have a new request for "${request.serviceTitle}"`,
-        read: false,
-        createdAt: new Date().toISOString(),
-        data: { requestId: request.id },
-      };
-      const updatedNotifs = [notif, ...notifications];
-      setNotifications(updatedNotifs);
-      await save("notifications", updatedNotifs);
-    },
-    [requests, conversations, notifications, save]
-  );
+  const updateRequest = useCallback(async (id: string, status: RequestStatus) => {
+    setRequests((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      let escrow = { ...r.escrow };
+      if (status === "completed") escrow = { ...escrow, status: "released" };
+      if (status === "cancelled") escrow = { ...escrow, status: "refunded" };
+      return { ...r, status, escrow, updatedAt: new Date().toISOString() };
+    }));
+    try {
+      await api.requests.updateStatus(id, status);
+      await loadNotifications();
+    } catch {}
+  }, []);
 
-  const updateRequest = useCallback(
-    async (id: string, status: RequestStatus) => {
-      const updated = requests.map((r) => {
-        if (r.id !== id) return r;
-        let escrow = { ...r.escrow };
-        if (status === "completed") escrow = { ...escrow, status: "released" };
-        if (status === "cancelled") escrow = { ...escrow, status: "refunded" };
-        return { ...r, status, escrow, updatedAt: new Date().toISOString() };
+  const sendMessage = useCallback(async (msg: ChatMessage) => {
+    const convMessages = messages[msg.conversationId] ?? [];
+    setMessages((prev) => ({
+      ...prev,
+      [msg.conversationId]: [...convMessages, msg],
+    }));
+    setConversations((prev) => prev.map((c) =>
+      c.id === msg.conversationId
+        ? { ...c, lastMessage: msg.text, lastMessageTime: msg.timestamp }
+        : c
+    ));
+    try {
+      await api.conversations.sendMessage(msg.conversationId, msg.text);
+    } catch {}
+  }, [messages]);
+
+  const markConversationRead = useCallback(async (conversationId: string) => {
+    setConversations((prev) => prev.map((c) =>
+      c.id === conversationId ? { ...c, unreadCount: 0 } : c
+    ));
+    setMessages((prev) => {
+      const updated: Record<string, ChatMessage[]> = {};
+      for (const [key, msgs] of Object.entries(prev)) {
+        updated[key] = key === conversationId ? msgs.map((m) => ({ ...m, read: true })) : msgs;
+      }
+      return updated;
+    });
+    try {
+      const data = await api.conversations.messages(conversationId);
+      setMessages((prev) => ({
+        ...prev,
+        [conversationId]: data.map(mapApiMessage),
+      }));
+    } catch {}
+  }, []);
+
+  const addReview = useCallback(async (review: Review) => {
+    setReviews((prev) => [review, ...prev]);
+    try {
+      await api.reviews.create({
+        providerId: review.providerId,
+        listingId: review.listingId,
+        requestId: review.requestId ?? "",
+        rating: review.rating,
+        comment: review.comment,
       });
-      setRequests(updated);
-      await save("requests", updated);
+      await loadListings();
+    } catch {}
+  }, []);
 
-      const req = updated.find((r) => r.id === id);
-      if (req) {
-        const notif: Notification = {
-          id: Date.now().toString(),
-          type:
-            status === "accepted"
-              ? "request_accepted"
-              : status === "completed"
-                ? "request_completed"
-                : "payment",
-          title:
-            status === "accepted"
-              ? "Request Accepted!"
-              : status === "completed"
-                ? "Service Completed"
-                : "Request Updated",
-          body:
-            status === "accepted"
-              ? `${req.providerName} accepted your request for "${req.serviceTitle}"`
-              : status === "completed"
-                ? `Payment of $${req.price} released from escrow`
-                : `Your request status changed to ${status}`,
-          read: false,
-          createdAt: new Date().toISOString(),
-          data: { requestId: id },
-        };
-        const updatedNotifs = [notif, ...notifications];
-        setNotifications(updatedNotifs);
-        await save("notifications", updatedNotifs);
-      }
-    },
-    [requests, notifications, save]
-  );
-
-  const sendMessage = useCallback(
-    async (msg: ChatMessage) => {
-      const convMessages = messages[msg.conversationId] ?? [];
-      const updatedMessages = {
-        ...messages,
-        [msg.conversationId]: [...convMessages, msg],
-      };
-      setMessages(updatedMessages);
-      await save("messages", updatedMessages);
-
-      const updatedConvs = conversations.map((c) =>
-        c.id === msg.conversationId
-          ? {
-              ...c,
-              lastMessage: msg.text,
-              lastMessageTime: msg.timestamp,
-              unreadCount:
-                c.unreadCount +
-                (msg.senderId !== currentUser?.id ? 1 : 0),
-            }
-          : c
-      );
-      setConversations(updatedConvs);
-      await save("conversations", updatedConvs);
-    },
-    [messages, conversations, currentUser, save]
-  );
-
-  const markConversationRead = useCallback(
-    async (conversationId: string) => {
-      const updatedMessages: Record<string, ChatMessage[]> = {};
-      for (const [key, msgs] of Object.entries(messages)) {
-        updatedMessages[key] =
-          key === conversationId
-            ? msgs.map((m) => ({ ...m, read: true }))
-            : msgs;
-      }
-      setMessages(updatedMessages);
-      await save("messages", updatedMessages);
-
-      const updatedConvs = conversations.map((c) =>
-        c.id === conversationId ? { ...c, unreadCount: 0 } : c
-      );
-      setConversations(updatedConvs);
-      await save("conversations", updatedConvs);
-    },
-    [messages, conversations, save]
-  );
-
-  const addReview = useCallback(
-    async (review: Review) => {
-      const updated = [review, ...reviews];
-      setReviews(updated);
-      await save("reviews", updated);
-
-      const allForProvider = updated.filter(
-        (r) => r.providerId === review.providerId
-      );
-      const avgRating =
-        allForProvider.reduce((sum, r) => sum + r.rating, 0) /
-        allForProvider.length;
-      const updatedListings = listings.map((l) =>
-        l.providerId === review.providerId
-          ? {
-              ...l,
-              providerRating: Math.round(avgRating * 10) / 10,
-              reviewCount: allForProvider.length,
-            }
-          : l
-      );
-      setListings(updatedListings);
-      await save("listings", updatedListings);
-
-      const notif: Notification = {
-        id: Date.now().toString(),
-        type: "review",
-        title: "New Review",
-        body: `${review.seekerName} left you a ${review.rating}-star review!`,
-        read: false,
-        createdAt: new Date().toISOString(),
-      };
-      const updatedNotifs = [notif, ...notifications];
-      setNotifications(updatedNotifs);
-      await save("notifications", updatedNotifs);
-    },
-    [reviews, listings, notifications, save]
-  );
-
-  const markNotificationRead = useCallback(
-    async (id: string) => {
-      const updated = notifications.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      );
-      setNotifications(updated);
-      await save("notifications", updated);
-    },
-    [notifications, save]
-  );
+  const markNotificationRead = useCallback(async (id: string) => {
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    try {
+      await api.notifications.markRead(id);
+    } catch {}
+  }, []);
 
   const getUnreadNotificationCount = useCallback(() => {
     return notifications.filter((n) => !n.read).length;
   }, [notifications]);
+
+  const refreshListings = useCallback(loadListings, []);
+  const refreshRequests = useCallback(loadRequests, []);
+  const refreshConversations = useCallback(loadConversations, []);
+  const refreshNotifications = useCallback(loadNotifications, []);
 
   return (
     <AppContext.Provider
       value={{
         currentUser,
         isAuthenticated: !!currentUser,
+        isLoading,
         listings,
         requests,
         conversations,
@@ -645,6 +706,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addReview,
         markNotificationRead,
         getUnreadNotificationCount,
+        refreshListings,
+        refreshRequests,
+        refreshConversations,
+        refreshNotifications,
       }}
     >
       {children}

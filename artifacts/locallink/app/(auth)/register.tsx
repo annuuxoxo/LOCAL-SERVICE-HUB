@@ -16,7 +16,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import { UserProfile, UserRole } from "@/context/AppContext";
+import { UserRole } from "@/context/AppContext";
+import { api } from "@/lib/api";
 
 export default function RegisterScreen() {
   const C = Colors.light;
@@ -41,22 +42,31 @@ export default function RegisterScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 800));
-    const newUser: UserProfile = {
-      id: "user_" + Date.now(),
-      name: name.trim(),
-      email: email.trim(),
-      role,
-      rating: 0,
-      reviewCount: 0,
-      isVerified: false,
-      joinedAt: new Date().toISOString(),
-      completedJobs: 0,
-      earnings: role === "provider" ? 0 : undefined,
-    };
-    await login(newUser);
-    setLoading(false);
-    router.dismissAll();
+    try {
+      const { token, user } = await api.auth.register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        role,
+      });
+      await login({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        rating: user.rating ?? 0,
+        reviewCount: user.reviewCount ?? 0,
+        isVerified: user.isVerified ?? false,
+        joinedAt: user.joinedAt ?? new Date().toISOString(),
+        completedJobs: user.completedJobs ?? 0,
+        earnings: user.earnings ?? 0,
+      }, token);
+      router.dismissAll();
+    } catch (err: any) {
+      setError(err?.message ?? "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

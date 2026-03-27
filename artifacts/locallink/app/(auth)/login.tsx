@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
-import { UserProfile } from "@/context/AppContext";
+import { api } from "@/lib/api";
 
 export default function LoginScreen() {
   const C = Colors.light;
@@ -36,21 +36,29 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 800));
-    const mockUser: UserProfile = {
-      id: "user_" + Date.now(),
-      name: email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      email,
-      role: "seeker",
-      rating: 0,
-      reviewCount: 0,
-      isVerified: false,
-      joinedAt: new Date().toISOString(),
-      completedJobs: 0,
-    };
-    await login(mockUser);
-    setLoading(false);
-    router.dismissAll();
+    try {
+      const { token, user } = await api.auth.login({ email: email.trim(), password });
+      await login({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        bio: user.bio,
+        location: user.location,
+        phone: user.phone,
+        rating: user.rating ?? 0,
+        reviewCount: user.reviewCount ?? 0,
+        isVerified: user.isVerified ?? false,
+        joinedAt: user.joinedAt ?? new Date().toISOString(),
+        completedJobs: user.completedJobs ?? 0,
+        earnings: user.earnings ?? 0,
+      }, token);
+      router.dismissAll();
+    } catch (err: any) {
+      setError(err?.message ?? "Login failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
