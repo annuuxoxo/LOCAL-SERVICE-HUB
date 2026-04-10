@@ -152,7 +152,7 @@ export default function ProfileScreen() {
             <View style={styles.statDivider} />
             <View style={styles.statCard}>
               <Text style={styles.statValue}>
-                ${currentUser?.earnings?.toFixed(0) ?? 0}
+                ₹{currentUser?.earnings?.toFixed(0) ?? 0}
               </Text>
               <Text style={styles.statLabel}>Earned</Text>
             </View>
@@ -228,7 +228,7 @@ export default function ProfileScreen() {
                     {l.title}
                   </Text>
                   <Text style={styles.myListingMeta}>
-                    ${l.price}{l.priceType === "hourly" ? "/hr" : ""} · {l.reviewCount} reviews
+                    ₹{l.price}{l.priceType === "hourly" ? "/hr" : ""} · {l.reviewCount} reviews
                   </Text>
                 </View>
                 <View style={[styles.activeIndicator, { backgroundColor: l.isActive ? C.success : C.textTertiary }]} />

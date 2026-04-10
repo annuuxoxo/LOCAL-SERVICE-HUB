@@ -64,7 +64,7 @@ export default function RequestDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         "Service Completed!",
-        `Payment of $${request.price} has been released from escrow to ${request.providerName}.`,
+        `Payment of ₹${request.price} has been released from escrow to ${request.providerName}.`,
         [{ text: "OK" }]
       );
     }
@@ -232,7 +232,7 @@ export default function RequestDetailScreen() {
             </View>
             <View style={styles.escrowRow}>
               <Text style={styles.escrowLabel}>Amount</Text>
-              <Text style={styles.escrowAmount}>${request.escrow.amount}</Text>
+              <Text style={styles.escrowAmount}>₹{request.escrow.amount}</Text>
             </View>
             <View style={styles.escrowRow}>
               <Text style={styles.escrowLabel}>Status</Text>

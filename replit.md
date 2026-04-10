@@ -107,3 +107,19 @@ artifacts-monorepo/
 - Accent: coral `#FF6B47`
 - Font: Inter (400, 500, 600, 700)
 - Clean minimal modern aesthetic
+
+## Currency
+- All prices displayed in Indian Rupees (₹) — no USD
+
+## Location
+- Default map center: Mulund West, Mumbai (19.1726, 72.9538)
+- Seed listings: 10 services in Mulund, Mumbai with INR prices
+- User location stored in AsyncStorage (`@locallink:user_location`)
+- Map radius filter: 1km / 2km (default) / 5km / 10km options
+- Haversine formula used for distance calculation (km)
+
+## App Flow
+1. `app/index.tsx` — Landing page (unauthenticated)
+2. `(auth)/login` or `(auth)/register` — Auth modal
+3. `app/set-location.tsx` — Location pinning (after first login)
+4. `(tabs)` — Main app with home, map, requests, messages, profile

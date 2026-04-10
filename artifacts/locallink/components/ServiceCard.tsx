@@ -94,14 +94,14 @@ export function ServiceCard({ listing, compact = false }: ServiceCardProps) {
               <>
                 <Text style={styles.dot}>·</Text>
                 <Text style={styles.compactDistance}>
-                  {listing.distance.toFixed(1)} mi
+                  {listing.distance.toFixed(1)} km
                 </Text>
               </>
             )}
           </View>
         </View>
         <Text style={styles.compactPrice}>
-          ${listing.price}
+          ₹{listing.price}
           {listing.priceType === "hourly" ? "/hr" : ""}
         </Text>
       </Pressable>
@@ -131,7 +131,7 @@ export function ServiceCard({ listing, compact = false }: ServiceCardProps) {
               <View style={styles.distanceRow}>
                 <Feather name="navigation" size={10} color={C.textTertiary} />
                 <Text style={styles.distanceText}>
-                  {listing.distance.toFixed(1)} mi
+                  {listing.distance.toFixed(1)} km
                 </Text>
               </View>
             )}
@@ -164,7 +164,7 @@ export function ServiceCard({ listing, compact = false }: ServiceCardProps) {
           </View>
         </View>
         <View style={styles.priceBox}>
-          <Text style={styles.priceValue}>${listing.price}</Text>
+          <Text style={styles.priceValue}>₹{listing.price}</Text>
           <Text style={styles.priceType}>
             {listing.priceType === "hourly"
               ? "/hr"

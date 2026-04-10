@@ -82,7 +82,7 @@ export default function ServiceDetailScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
       "Request Sent!",
-      `Your request for "${listing.title}" has been sent to ${listing.providerName}. Payment of $${listing.price} is held in escrow.`,
+      `Your request for "${listing.title}" has been sent to ${listing.providerName}. Payment of ₹${listing.price} is held in escrow.`,
       [
         {
           text: "View Requests",
@@ -128,7 +128,7 @@ export default function ServiceDetailScreen() {
             {listing.distance !== undefined && (
               <View style={styles.distanceBlock}>
                 <Ionicons name="navigate-outline" size={14} color={C.textSecondary} />
-                <Text style={styles.distanceText}>{listing.distance.toFixed(1)} mi away</Text>
+                <Text style={styles.distanceText}>{listing.distance.toFixed(1)} km away</Text>
               </View>
             )}
           </View>
@@ -137,7 +137,7 @@ export default function ServiceDetailScreen() {
             <View>
               <Text style={styles.priceLabel}>Price</Text>
               <Text style={styles.priceValue}>
-                ${listing.price}
+                ₹{listing.price}
                 <Text style={styles.priceType}>
                   {listing.priceType === "hourly"
                     ? " / hour"
@@ -287,7 +287,7 @@ export default function ServiceDetailScreen() {
             <View style={styles.escrowNoticeText}>
               <Text style={styles.escrowNoticeTitle}>Escrow Payment</Text>
               <Text style={styles.escrowNoticeDesc}>
-                ${listing.price} will be held securely until service is completed
+                ₹${listing.price} will be held securely until service is completed
               </Text>
             </View>
           </View>
@@ -327,7 +327,7 @@ export default function ServiceDetailScreen() {
               ) : (
                 <>
                   <Ionicons name="shield-checkmark-outline" size={16} color="#fff" />
-                  <Text style={styles.confirmBtnText}>Confirm & Pay ${listing.price}</Text>
+                  <Text style={styles.confirmBtnText}>Confirm & Pay ₹{listing.price}</Text>
                 </>
               )}
             </Pressable>

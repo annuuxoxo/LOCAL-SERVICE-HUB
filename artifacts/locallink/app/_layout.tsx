@@ -22,8 +22,16 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
+      <Stack.Screen
+        name="set-location"
+        options={{
+          headerShown: false,
+          presentation: "fullScreenModal",
+        }}
+      />
       <Stack.Screen
         name="service/[id]"
         options={{

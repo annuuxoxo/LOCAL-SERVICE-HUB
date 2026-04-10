@@ -173,7 +173,7 @@ router.patch("/requests/:id/status", requireAuth, async (req, res) => {
     body: status === "accepted"
       ? `Your request for "${existing.serviceTitle}" was accepted`
       : status === "completed"
-        ? `Payment of $${existing.price} released from escrow`
+        ? `Payment of ₹${existing.price} released from escrow`
         : `Request status changed to ${status}`,
     data: { requestId: id },
   });

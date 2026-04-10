@@ -177,7 +177,7 @@ export default function CreateListingScreen() {
           <Text style={styles.label}>Price *</Text>
           <View style={styles.priceRow}>
             <View style={styles.priceInputWrapper}>
-              <Text style={styles.dollarSign}>$</Text>
+              <Text style={styles.dollarSign}>₹</Text>
               <TextInput
                 style={styles.priceInput}
                 placeholder="0"

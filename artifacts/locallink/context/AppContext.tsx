@@ -28,6 +28,12 @@ export interface UserProfile {
   earnings?: number;
 }
 
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+  name?: string;
+}
+
 export type ServiceCategory =
   | "tutoring"
   | "tailoring"
@@ -149,6 +155,8 @@ interface AppContextType {
   currentUser: UserProfile | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  userLocation: UserLocation | null;
+  setUserLocation: (loc: UserLocation) => Promise<void>;
   listings: ServiceListing[];
   requests: ServiceRequest[];
   conversations: Conversation[];
@@ -297,122 +305,202 @@ const SEED_LISTINGS: ServiceListing[] = [
   {
     id: "seed_l1",
     providerId: "seed_p1",
-    providerName: "Maria Santos",
+    providerName: "Rohan Sharma",
     providerRating: 4.9,
-    title: "Math & Science Tutoring",
-    description: "Expert tutoring for K-12 and college students. Specialized in Algebra, Calculus, Physics, and Chemistry. Patient, experienced, and results-oriented.",
+    title: "Maths & Science Tutor (10th–12th)",
+    description: "Experienced tutor for SSC and HSC students. Algebra, Calculus, Physics and Chemistry. Home visits available in Mulund and nearby areas.",
     category: "tutoring",
-    price: 35,
+    price: 500,
     priceType: "hourly",
-    location: "Brooklyn, NY",
-    latitude: 40.6782,
-    longitude: -73.9442,
+    location: "Mulund West, Mumbai",
+    latitude: 19.1726,
+    longitude: 72.9538,
     availability: ["Mon", "Wed", "Fri", "Sat"],
-    tags: ["math", "science", "K-12", "college"],
+    tags: ["maths", "science", "SSC", "HSC"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
     reviewCount: 24,
-    distance: 0.8,
+    distance: 0.5,
   },
   {
     id: "seed_l2",
     providerId: "seed_p2",
-    providerName: "Aisha Thompson",
+    providerName: "Sunita Joshi",
     providerRating: 4.8,
     title: "Custom Tailoring & Alterations",
-    description: "Professional tailor with 15 years of experience. Wedding dresses, suits, casual wear. Quick turnaround and perfect fit guaranteed.",
+    description: "Professional tailor with 12 years of experience. Salwar suits, sarees, kurtas, blouses and western wear. Quick turnaround guaranteed.",
     category: "tailoring",
-    price: 50,
+    price: 800,
     priceType: "fixed",
-    location: "Queens, NY",
-    latitude: 40.7282,
-    longitude: -73.7949,
+    location: "Mulund East, Mumbai",
+    latitude: 19.1700,
+    longitude: 72.9580,
     availability: ["Tue", "Thu", "Sat", "Sun"],
-    tags: ["tailoring", "alterations", "wedding", "suits"],
+    tags: ["tailoring", "blouse", "salwar", "alterations"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
     reviewCount: 41,
-    distance: 1.2,
+    distance: 0.8,
   },
   {
     id: "seed_l3",
     providerId: "seed_p3",
-    providerName: "Priya Patel",
+    providerName: "Priya Kulkarni",
     providerRating: 4.95,
-    title: "Authentic Home-Cooked Indian Meals",
-    description: "Fresh, home-cooked authentic Indian cuisine. Meal prep, tiffin service, and catering for small events. Vegan and gluten-free options available.",
+    title: "Home-Cooked Maharashtrian Tiffin",
+    description: "Fresh, home-cooked authentic Maharashtrian food. Daily tiffin service, special Puran Poli, Ukadiche Modak for festivals. Veg options only.",
     category: "homefood",
-    price: 15,
+    price: 200,
     priceType: "fixed",
-    location: "Jersey City, NJ",
-    latitude: 40.7178,
-    longitude: -74.0431,
+    location: "Mulund West, Mumbai",
+    latitude: 19.1750,
+    longitude: 72.9510,
     availability: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-    tags: ["indian food", "meal prep", "vegan", "catering"],
+    tags: ["tiffin", "maharashtrian", "veg", "homemade"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
     reviewCount: 67,
-    distance: 2.1,
+    distance: 0.4,
   },
   {
     id: "seed_l4",
     providerId: "seed_p4",
-    providerName: "Carlos Rivera",
+    providerName: "Mahesh Patil",
     providerRating: 4.7,
     title: "Home Repair & Handyman Services",
-    description: "Licensed handyman with 10+ years experience. Plumbing, electrical, carpentry, painting, and general repairs. Licensed and insured.",
+    description: "Licensed handyman with 10+ years experience in Mumbai. Plumbing, electrical, carpentry, AC servicing and general repairs.",
     category: "repair",
-    price: 75,
+    price: 600,
     priceType: "hourly",
-    location: "Bronx, NY",
-    latitude: 40.8448,
-    longitude: -73.8648,
+    location: "Mulund Colony, Mumbai",
+    latitude: 19.1680,
+    longitude: 72.9600,
     availability: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     tags: ["handyman", "plumbing", "electrical", "carpentry"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
     reviewCount: 33,
-    distance: 3.5,
+    distance: 1.1,
   },
   {
     id: "seed_l5",
     providerId: "seed_p5",
-    providerName: "Sophie Chen",
+    providerName: "Kavita Desai",
     providerRating: 4.85,
-    title: "Deep Cleaning & Organization",
-    description: "Professional deep cleaning services. Move-in/move-out, weekly cleaning, and home organization. Eco-friendly products available.",
+    title: "Deep Cleaning & Home Organization",
+    description: "Professional deep cleaning services for flats and bungalows. Move-in/move-out, festive cleaning, sofa and carpet cleaning. Eco-friendly products.",
     category: "cleaning",
-    price: 120,
+    price: 2000,
     priceType: "fixed",
-    location: "Manhattan, NY",
-    latitude: 40.7831,
-    longitude: -73.9712,
+    location: "Mulund West, Mumbai",
+    latitude: 19.1735,
+    longitude: 72.9525,
     availability: ["Mon", "Wed", "Fri", "Sat", "Sun"],
-    tags: ["cleaning", "deep clean", "organization", "eco-friendly"],
+    tags: ["cleaning", "deep clean", "sofa", "eco-friendly"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     reviewCount: 19,
-    distance: 4.2,
+    distance: 0.6,
   },
   {
     id: "seed_l6",
     providerId: "seed_p6",
-    providerName: "James Wilson",
+    providerName: "Anita Nair",
+    providerRating: 4.9,
+    title: "Bridal Makeup & Beauty at Home",
+    description: "Professional makeup artist for weddings, engagements, parties and events. Offers bridal packages, mehndi, and hair styling at your doorstep.",
+    category: "beauty",
+    price: 3500,
+    priceType: "fixed",
+    location: "Mulund East, Mumbai",
+    latitude: 19.1710,
+    longitude: 72.9560,
+    availability: ["Sat", "Sun", "Wed", "Thu"],
+    tags: ["bridal", "makeup", "mehndi", "hair"],
+    isActive: true,
+    createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+    reviewCount: 58,
+    distance: 0.9,
+  },
+  {
+    id: "seed_l7",
+    providerId: "seed_p7",
+    providerName: "Raju Tiwari",
     providerRating: 4.6,
-    title: "Garden & Lawn Care",
-    description: "Complete garden care including lawn mowing, hedge trimming, planting, and seasonal clean-up. Transform your outdoor space.",
+    title: "Garden & Plant Care Services",
+    description: "Complete terrace garden, balcony garden and indoor plant care. Planting, pruning, watering schedules, fertiliser advice, and seasonal care.",
     category: "gardening",
-    price: 60,
+    price: 500,
     priceType: "hourly",
-    location: "Staten Island, NY",
-    latitude: 40.5795,
-    longitude: -74.1502,
+    location: "Bhandup West, Mumbai",
+    latitude: 19.1490,
+    longitude: 72.9512,
     availability: ["Sat", "Sun"],
-    tags: ["garden", "lawn care", "landscaping", "seasonal"],
+    tags: ["garden", "terrace", "plants", "balcony"],
     isActive: true,
     createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
     reviewCount: 12,
-    distance: 5.8,
+    distance: 2.5,
+  },
+  {
+    id: "seed_l8",
+    providerId: "seed_p8",
+    providerName: "Suresh Kamble",
+    providerRating: 4.75,
+    title: "Plumbing & Pipe Fitting",
+    description: "Expert plumber for all types of plumbing work — leakage, tap replacement, sanitary fittings, water heater installation, and drainage cleaning.",
+    category: "plumbing",
+    price: 700,
+    priceType: "hourly",
+    location: "Mulund East, Mumbai",
+    latitude: 19.1715,
+    longitude: 72.9595,
+    availability: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    tags: ["plumbing", "leakage", "tap", "drainage"],
+    isActive: true,
+    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
+    reviewCount: 28,
+    distance: 1.0,
+  },
+  {
+    id: "seed_l9",
+    providerId: "seed_p9",
+    providerName: "Meena Iyer",
+    providerRating: 4.8,
+    title: "Spoken English & Communication Classes",
+    description: "Improve your English speaking and communication skills. Classes for professionals, students and homemakers. Group or individual sessions available.",
+    category: "tutoring",
+    price: 400,
+    priceType: "hourly",
+    location: "Mulund West, Mumbai",
+    latitude: 19.1740,
+    longitude: 72.9530,
+    availability: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    tags: ["english", "spoken", "communication", "classes"],
+    isActive: true,
+    createdAt: new Date(Date.now() - 86400000 * 8).toISOString(),
+    reviewCount: 37,
+    distance: 0.7,
+  },
+  {
+    id: "seed_l10",
+    providerId: "seed_p10",
+    providerName: "Deepak Verma",
+    providerRating: 4.7,
+    title: "AC Servicing & Repair",
+    description: "Certified AC technician — servicing, gas refilling, repair for all brands. Window, split, and cassette ACs. Same-day service available in Mulund.",
+    category: "repair",
+    price: 800,
+    priceType: "fixed",
+    location: "Mulund Colony, Mumbai",
+    latitude: 19.1660,
+    longitude: 72.9610,
+    availability: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    tags: ["AC", "servicing", "repair", "gas-refill"],
+    isActive: true,
+    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+    reviewCount: 45,
+    distance: 1.3,
   },
 ];
 
@@ -421,21 +509,31 @@ const SEED_REVIEWS: Review[] = [
     id: "seed_r1",
     providerId: "seed_p1",
     seekerId: "seed_s1",
-    seekerName: "Alex Kim",
+    seekerName: "Arjun Mehta",
     listingId: "seed_l1",
     rating: 5,
-    comment: "Maria is an incredible tutor! My son's grades improved dramatically. Highly recommended!",
+    comment: "Rohan bhai is an excellent tutor! My daughter's marks improved from 65% to 89%. Highly recommended for Maths!",
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
   {
     id: "seed_r2",
     providerId: "seed_p2",
     seekerId: "seed_s2",
-    seekerName: "Emma Davis",
+    seekerName: "Pooja Sawant",
     listingId: "seed_l2",
     rating: 5,
-    comment: "Amazing work on my wedding dress alterations. Perfect fit, fast turnaround!",
+    comment: "Sunita tai did a perfect job on my wedding blouse. Exact fit and delivered in 2 days!",
     createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+  },
+  {
+    id: "seed_r3",
+    providerId: "seed_p3",
+    seekerId: "seed_s3",
+    seekerName: "Rahul Joshi",
+    listingId: "seed_l3",
+    rating: 5,
+    comment: "Best tiffin service in Mulund! Fresh food, on time, very hygienic. Just like ghar ka khana.",
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
   },
 ];
 
@@ -444,6 +542,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [userLocation, setUserLocationState] = useState<UserLocation | null>(null);
   const [listings, setListings] = useState<ServiceListing[]>(SEED_LISTINGS);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -454,6 +553,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const init = async () => {
       try {
+        const storedLoc = await AsyncStorage.getItem("@locallink:user_location");
+        if (storedLoc) {
+          setUserLocationState(JSON.parse(storedLoc));
+        }
         const user = await api.auth.me();
         setCurrentUser(mapApiUser(user));
         await Promise.all([
@@ -470,6 +573,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     };
     init();
+  }, []);
+
+  const setUserLocation = useCallback(async (loc: UserLocation) => {
+    setUserLocationState(loc);
+    await AsyncStorage.setItem("@locallink:user_location", JSON.stringify(loc));
   }, []);
 
   const loadListings = async () => {
@@ -687,6 +795,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         isAuthenticated: !!currentUser,
         isLoading,
+        userLocation,
+        setUserLocation,
         listings,
         requests,
         conversations,
