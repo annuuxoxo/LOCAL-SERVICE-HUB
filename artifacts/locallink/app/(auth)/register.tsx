@@ -61,7 +61,7 @@ export default function RegisterScreen() {
         completedJobs: user.completedJobs ?? 0,
         earnings: user.earnings ?? 0,
       }, token);
-      router.dismissAll();
+      router.replace("/set-location");
     } catch (err: any) {
       setError(err?.message ?? "Registration failed. Please try again.");
     } finally {

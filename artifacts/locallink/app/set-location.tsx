@@ -87,9 +87,9 @@ export default function SetLocationScreen() {
     router.replace("/(tabs)");
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     const defaultLoc = { latitude: MUMBAI_CENTER.latitude, longitude: MUMBAI_CENTER.longitude, name: "Mumbai" };
-    setUserLocation(defaultLoc);
+    await setUserLocation(defaultLoc);
     router.replace("/(tabs)");
   };
 

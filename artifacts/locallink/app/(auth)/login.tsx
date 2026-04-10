@@ -21,7 +21,7 @@ import { api } from "@/lib/api";
 export default function LoginScreen() {
   const C = Colors.light;
   const insets = useSafeAreaInsets();
-  const { login } = useApp();
+  const { login, userLocation } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -53,7 +53,11 @@ export default function LoginScreen() {
         completedJobs: user.completedJobs ?? 0,
         earnings: user.earnings ?? 0,
       }, token);
-      router.dismissAll();
+      if (!userLocation) {
+        router.replace("/set-location");
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch (err: any) {
       setError(err?.message ?? "Login failed. Please check your credentials.");
     } finally {

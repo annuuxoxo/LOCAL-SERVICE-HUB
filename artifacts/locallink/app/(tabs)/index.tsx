@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  FlatList,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,11 +30,33 @@ const CATEGORIES: { id: ServiceCategory | "all"; label: string; icon: string }[]
 export default function HomeScreen() {
   const C = Colors.light;
   const insets = useSafeAreaInsets();
-  const { listings, currentUser, isAuthenticated } = useApp();
+  const { listings, currentUser, isAuthenticated, userLocation } = useApp();
+
+  function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  const listingsWithDistance = listings.map((l) => {
+    if (userLocation) {
+      return {
+        ...l,
+        distance: haversineKm(userLocation.latitude, userLocation.longitude, l.latitude, l.longitude),
+      };
+    }
+    return l;
+  });
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | "all">("all");
 
-  const filtered = listings.filter((l) => {
+  const filtered = listingsWithDistance.filter((l) => {
     const matchSearch =
       !search ||
       l.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -49,8 +71,8 @@ export default function HomeScreen() {
     (a, b) => (a.distance ?? 99) - (b.distance ?? 99)
   );
 
-  const nearby = sortedByDistance.slice(0, 3);
-  const topRated = [...filtered].sort((a, b) => b.providerRating - a.providerRating).slice(0, 3);
+  const nearby = sortedByDistance.filter((l) => (l.distance ?? 99) <= 5).slice(0, 4);
+  const topRated = [...filtered].sort((a, b) => b.providerRating - a.providerRating).slice(0, 4);
 
   const handleSearchPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -91,6 +113,19 @@ export default function HomeScreen() {
           </Pressable>
         )}
       </View>
+
+      {userLocation && (
+        <Pressable
+          style={styles.locationBanner}
+          onPress={() => router.push("/set-location")}
+        >
+          <Ionicons name="location" size={14} color={C.primary} />
+          <Text style={styles.locationText} numberOfLines={1}>
+            {userLocation.name ?? `${userLocation.latitude.toFixed(3)}, ${userLocation.longitude.toFixed(3)}`}
+          </Text>
+          <Feather name="chevron-down" size={13} color={C.primary} />
+        </Pressable>
+      )}
 
       <View style={styles.searchRow}>
         <View style={styles.searchWrapper}>
@@ -197,7 +232,7 @@ export default function HomeScreen() {
             </>
           )}
 
-          {listings.length === 0 && (
+          {listingsWithDistance.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="compass-outline" size={48} color={C.textTertiary} />
               <Text style={styles.emptyTitle}>No listings yet</Text>
@@ -212,7 +247,6 @@ export default function HomeScreen() {
   );
 }
 
-import { Platform } from "react-native";
 const C = Colors.light;
 
 const styles = StyleSheet.create({
