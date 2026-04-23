@@ -241,7 +241,7 @@ export default function ProfileScreen() {
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         {[
-          { icon: "bell-outline", label: "Notifications" },
+          { icon: "notifications-outline", label: "Notifications" },
           { icon: "shield-checkmark-outline", label: "Privacy & Security" },
           { icon: "help-circle-outline", label: "Help & Support" },
         ].map((item) => (

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import MapView, { Marker, Region } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
@@ -32,20 +33,55 @@ const CATEGORIES: { id: ServiceCategory; label: string; icon: string }[] = [
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const MUMBAI_DEFAULT = { latitude: 19.1726, longitude: 72.9538 };
+
+const MUMBAI_AREAS = [
+  { name: "Mulund West", latitude: 19.1726, longitude: 72.9538 },
+  { name: "Mulund East", latitude: 19.1700, longitude: 72.9580 },
+  { name: "Mulund Colony", latitude: 19.1680, longitude: 72.9600 },
+  { name: "Bhandup West", latitude: 19.1490, longitude: 72.9512 },
+  { name: "Bhandup East", latitude: 19.1508, longitude: 72.9600 },
+  { name: "Nahur", latitude: 19.1400, longitude: 72.9500 },
+  { name: "Vikhroli", latitude: 19.1080, longitude: 72.9260 },
+  { name: "Ghatkopar", latitude: 19.0860, longitude: 72.9080 },
+  { name: "Powai", latitude: 19.1196, longitude: 72.9070 },
+  { name: "Thane West", latitude: 19.2183, longitude: 72.9781 },
+];
+
 export default function CreateListingScreen() {
   const C = Colors.light;
   const insets = useSafeAreaInsets();
-  const { currentUser, addListing } = useApp();
+  const { currentUser, addListing, userLocation, refreshListings } = useApp();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<ServiceCategory>("tutoring");
   const [price, setPrice] = useState("");
   const [priceType, setPriceType] = useState<"hourly" | "fixed" | "negotiable">("hourly");
-  const [location, setLocation] = useState("");
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [pinCoord, setPinCoord] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
+  const [region, setRegion] = useState<Region>({
+    latitude: userLocation?.latitude ?? MUMBAI_DEFAULT.latitude,
+    longitude: userLocation?.longitude ?? MUMBAI_DEFAULT.longitude,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
+
+  useEffect(() => {
+    if (userLocation && !pinCoord) {
+      const defaultName = userLocation.name ?? "My Location";
+      setPinCoord({ latitude: userLocation.latitude, longitude: userLocation.longitude, name: defaultName });
+      setRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.03,
+        longitudeDelta: 0.03,
+      });
+    }
+  }, [userLocation]);
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>
@@ -53,9 +89,26 @@ export default function CreateListingScreen() {
     );
   };
 
+  const handleMapPress = (e: any) => {
+    const coord = e.nativeEvent?.coordinate;
+    if (!coord) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPinCoord({ latitude: coord.latitude, longitude: coord.longitude, name: "Custom Pin" });
+  };
+
+  const handleSelectArea = (area: typeof MUMBAI_AREAS[0]) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPinCoord({ ...area });
+    setRegion({ latitude: area.latitude, longitude: area.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 });
+  };
+
   const handleSubmit = async () => {
-    if (!title.trim() || !description.trim() || !price || !location.trim()) {
-      Alert.alert("Missing Fields", "Please fill in all required fields.");
+    if (!title.trim() || !description.trim() || !price) {
+      Alert.alert("Missing Fields", "Please fill in title, description, and price.");
+      return;
+    }
+    if (!pinCoord) {
+      Alert.alert("Location Required", "Please pin your service location on the map or pick a neighbourhood.");
       return;
     }
     if (selectedDays.length === 0) {
@@ -65,33 +118,37 @@ export default function CreateListingScreen() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
 
     const listing: ServiceListing = {
       id: "l_" + Date.now(),
       providerId: currentUser!.id,
       providerName: currentUser!.name,
-      providerRating: 0,
+      providerRating: currentUser?.rating ?? 0,
       title: title.trim(),
       description: description.trim(),
       category,
       price: parseFloat(price),
       priceType,
-      location: location.trim(),
-      latitude: 40.7128 + (Math.random() - 0.5) * 0.3,
-      longitude: -74.006 + (Math.random() - 0.5) * 0.3,
+      location: pinCoord.name === "Custom Pin"
+        ? `${pinCoord.latitude.toFixed(4)}, ${pinCoord.longitude.toFixed(4)}`
+        : pinCoord.name,
+      latitude: pinCoord.latitude,
+      longitude: pinCoord.longitude,
       availability: selectedDays,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
       isActive: true,
       createdAt: new Date().toISOString(),
       reviewCount: 0,
-      distance: Math.round(Math.random() * 50) / 10,
     };
 
     await addListing(listing);
+    await refreshListings();
     setLoading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    Alert.alert("Published!", "Your listing is now live and visible on the map.", [
+      { text: "View Map", onPress: () => router.replace("/(tabs)/map") },
+      { text: "Done", onPress: () => router.back() },
+    ]);
   };
 
   return (
@@ -100,17 +157,12 @@ export default function CreateListingScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.pageTitle}>Create a Listing</Text>
-        <Text style={styles.pageSubtitle}>
-          Share your skills with the community
-        </Text>
+        <Text style={styles.pageSubtitle}>Share your skills with the community</Text>
 
         <View style={styles.section}>
           <Text style={styles.label}>Category *</Text>
@@ -118,10 +170,7 @@ export default function CreateListingScreen() {
             {CATEGORIES.map((cat) => (
               <Pressable
                 key={cat.id}
-                style={[
-                  styles.categoryOption,
-                  category === cat.id && styles.categoryOptionActive,
-                ]}
+                style={[styles.categoryOption, category === cat.id && styles.categoryOptionActive]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setCategory(cat.id);
@@ -132,12 +181,7 @@ export default function CreateListingScreen() {
                   size={20}
                   color={category === cat.id ? "#fff" : C.textSecondary}
                 />
-                <Text
-                  style={[
-                    styles.categoryOptionLabel,
-                    category === cat.id && styles.categoryOptionLabelActive,
-                  ]}
-                >
+                <Text style={[styles.categoryOptionLabel, category === cat.id && styles.categoryOptionLabelActive]}>
                   {cat.label}
                 </Text>
               </Pressable>
@@ -149,7 +193,7 @@ export default function CreateListingScreen() {
           <Text style={styles.label}>Listing Title *</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g., Math & Science Tutoring"
+            placeholder="e.g., Maths & Science Tutoring"
             placeholderTextColor={C.textTertiary}
             value={title}
             onChangeText={setTitle}
@@ -177,7 +221,7 @@ export default function CreateListingScreen() {
           <Text style={styles.label}>Price *</Text>
           <View style={styles.priceRow}>
             <View style={styles.priceInputWrapper}>
-              <Text style={styles.dollarSign}>₹</Text>
+              <Text style={styles.currencySign}>₹</Text>
               <TextInput
                 style={styles.priceInput}
                 placeholder="0"
@@ -191,18 +235,10 @@ export default function CreateListingScreen() {
               {(["hourly", "fixed", "negotiable"] as const).map((type) => (
                 <Pressable
                   key={type}
-                  style={[
-                    styles.priceTypeBtn,
-                    priceType === type && styles.priceTypeBtnActive,
-                  ]}
+                  style={[styles.priceTypeBtn, priceType === type && styles.priceTypeBtnActive]}
                   onPress={() => setPriceType(type)}
                 >
-                  <Text
-                    style={[
-                      styles.priceTypeText,
-                      priceType === type && styles.priceTypeTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.priceTypeText, priceType === type && styles.priceTypeTextActive]}>
                     {type === "hourly" ? "/hr" : type === "fixed" ? "fixed" : "neg."}
                   </Text>
                 </Pressable>
@@ -212,16 +248,65 @@ export default function CreateListingScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Location *</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="location-outline" size={16} color={C.textTertiary} style={{ marginLeft: 12 }} />
-            <TextInput
-              style={styles.inputWithIcon}
-              placeholder="Your neighborhood or city"
-              placeholderTextColor={C.textTertiary}
-              value={location}
-              onChangeText={setLocation}
-            />
+          <Text style={styles.label}>Service Location *</Text>
+          <Text style={styles.sublabel}>
+            Tap on the map to pin your location or choose a neighbourhood below
+          </Text>
+
+          <View style={styles.mapContainer}>
+            <MapView
+              style={styles.map}
+              region={region}
+              onPress={handleMapPress}
+              onRegionChangeComplete={setRegion}
+            >
+              {pinCoord && (
+                <Marker coordinate={{ latitude: pinCoord.latitude, longitude: pinCoord.longitude }}>
+                  <View style={styles.pinMarker}>
+                    <Ionicons name="location" size={36} color="#FF6B47" />
+                  </View>
+                </Marker>
+              )}
+            </MapView>
+
+            {Platform.OS === "web" && (
+              <View style={styles.webOverlay}>
+                <Ionicons name="map-outline" size={36} color="#6B7280" />
+                <Text style={styles.webOverlayText}>Open on mobile to pin on the map</Text>
+                <Text style={styles.webOverlaySub}>Select a neighbourhood below</Text>
+              </View>
+            )}
+          </View>
+
+          {pinCoord && (
+            <View style={styles.pinnedBadge}>
+              <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+              <Text style={styles.pinnedBadgeText} numberOfLines={1}>
+                {pinCoord.name === "Custom Pin"
+                  ? `${pinCoord.latitude.toFixed(4)}, ${pinCoord.longitude.toFixed(4)}`
+                  : pinCoord.name}
+              </Text>
+            </View>
+          )}
+
+          <Text style={styles.areaPickerLabel}>Quick-pick a neighbourhood</Text>
+          <View style={styles.areasGrid}>
+            {MUMBAI_AREAS.map((area) => (
+              <Pressable
+                key={area.name}
+                style={[styles.areaChip, pinCoord?.name === area.name && styles.areaChipActive]}
+                onPress={() => handleSelectArea(area)}
+              >
+                <Ionicons
+                  name="location-outline"
+                  size={13}
+                  color={pinCoord?.name === area.name ? "#fff" : C.primary}
+                />
+                <Text style={[styles.areaChipLabel, pinCoord?.name === area.name && styles.areaChipLabelActive]}>
+                  {area.name}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
 
@@ -231,21 +316,13 @@ export default function CreateListingScreen() {
             {DAYS.map((day) => (
               <Pressable
                 key={day}
-                style={[
-                  styles.dayChip,
-                  selectedDays.includes(day) && styles.dayChipActive,
-                ]}
+                style={[styles.dayChip, selectedDays.includes(day) && styles.dayChipActive]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   toggleDay(day);
                 }}
               >
-                <Text
-                  style={[
-                    styles.dayLabel,
-                    selectedDays.includes(day) && styles.dayLabelActive,
-                  ]}
-                >
+                <Text style={[styles.dayLabel, selectedDays.includes(day) && styles.dayLabelActive]}>
                   {day}
                 </Text>
               </Pressable>
@@ -257,7 +334,7 @@ export default function CreateListingScreen() {
           <Text style={styles.label}>Tags (optional)</Text>
           <TextInput
             style={styles.input}
-            placeholder="math, algebra, calculus (comma-separated)"
+            placeholder="maths, algebra, cbse (comma-separated)"
             placeholderTextColor={C.textTertiary}
             value={tags}
             onChangeText={setTags}
@@ -302,19 +379,22 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginBottom: 24,
   },
-  section: { marginBottom: 20 },
+  section: { marginBottom: 22 },
   label: {
     fontSize: 13,
     fontWeight: "600",
     color: C.text,
     fontFamily: "Inter_600SemiBold",
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  sublabel: {
+    fontSize: 12,
+    color: C.textTertiary,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 10,
+    lineHeight: 17,
   },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   categoryOption: {
     flexDirection: "row",
     alignItems: "center",
@@ -326,10 +406,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  categoryOptionActive: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
-  },
+  categoryOptionActive: { backgroundColor: C.primary, borderColor: C.primary },
   categoryOptionLabel: {
     fontSize: 12,
     fontWeight: "500",
@@ -364,9 +441,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     paddingHorizontal: 12,
-    width: 100,
+    width: 110,
   },
-  dollarSign: {
+  currencySign: {
     fontSize: 18,
     fontWeight: "700",
     color: C.textSecondary,
@@ -389,10 +466,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  priceTypeBtnActive: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
-  },
+  priceTypeBtnActive: { backgroundColor: C.primary, borderColor: C.primary },
   priceTypeText: {
     fontSize: 12,
     fontWeight: "600",
@@ -400,21 +474,78 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   priceTypeTextActive: { color: "#fff" },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: C.backgroundSecondary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.border,
+  mapContainer: {
+    height: 220,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
+    position: "relative",
+    marginBottom: 10,
   },
-  inputWithIcon: {
-    flex: 1,
-    padding: 14,
-    fontSize: 15,
-    color: C.text,
+  map: { flex: 1 },
+  webOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  webOverlayText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    fontFamily: "Inter_600SemiBold",
+  },
+  webOverlaySub: {
+    fontSize: 12,
+    color: "#6B7280",
     fontFamily: "Inter_400Regular",
   },
+  pinMarker: { alignItems: "center" },
+  pinnedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#D1FAE5",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  pinnedBadgeText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#065F46",
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+  },
+  areaPickerLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: C.textSecondary,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 10,
+  },
+  areasGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  areaChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#EBF0FA",
+    borderRadius: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  areaChipActive: { backgroundColor: "#1B3A6B", borderColor: "#1B3A6B" },
+  areaChipLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1B3A6B",
+    fontFamily: "Inter_600SemiBold",
+  },
+  areaChipLabelActive: { color: "#fff" },
   daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dayChip: {
     width: 48,
@@ -426,10 +557,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  dayChipActive: {
-    backgroundColor: C.primary,
-    borderColor: C.primary,
-  },
+  dayChipActive: { backgroundColor: C.primary, borderColor: C.primary },
   dayLabel: {
     fontSize: 12,
     fontWeight: "600",
