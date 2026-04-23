@@ -6,6 +6,7 @@ import requestsRouter from "./requests.js";
 import conversationsRouter from "./conversations.js";
 import reviewsRouter from "./reviews.js";
 import notificationsRouter from "./notifications.js";
+import aiRouter from "./ai/index.js";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(requestsRouter);
 router.use(conversationsRouter);
 router.use(reviewsRouter);
 router.use(notificationsRouter);
+router.use(aiRouter);
 
 export default router;

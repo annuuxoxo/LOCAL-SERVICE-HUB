@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import Colors from "@/constants/colors";
 import { ServiceCard } from "@/components/ServiceCard";
 import { useApp } from "@/context/AppContext";
 import { ServiceCategory } from "@/context/AppContext";
+import { api } from "@/lib/api";
 
 const CATEGORIES: { id: ServiceCategory | "all"; label: string; icon: string }[] = [
   { id: "all", label: "All", icon: "grid" },
@@ -56,6 +58,12 @@ export default function HomeScreen() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | "all">("all");
 
+  const [aiMode, setAiMode] = useState(false);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResultIds, setAiResultIds] = useState<string[] | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+
   const filtered = listingsWithDistance.filter((l) => {
     const matchSearch =
       !search ||
@@ -74,8 +82,55 @@ export default function HomeScreen() {
   const nearby = sortedByDistance.filter((l) => (l.distance ?? 99) <= 5).slice(0, 4);
   const topRated = [...filtered].sort((a, b) => b.providerRating - a.providerRating).slice(0, 4);
 
+  const aiResults = aiResultIds
+    ? listingsWithDistance.filter((l) => aiResultIds.includes(l.id) && l.isActive)
+    : null;
+
   const handleSearchPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleAISearch = async () => {
+    if (!aiQuery.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAiLoading(true);
+    setAiResultIds(null);
+    setAiSummary(null);
+    try {
+      const result = await api.ai.smartSearch({
+        query: aiQuery.trim(),
+        listings: listingsWithDistance
+          .filter((l) => l.isActive)
+          .slice(0, 30)
+          .map((l) => ({
+            id: l.id,
+            title: l.title,
+            description: l.description,
+            category: l.category,
+            price: l.price,
+            priceType: l.priceType,
+            location: l.location,
+            providerName: l.providerName,
+            providerRating: l.providerRating,
+            distance: l.distance,
+          })),
+      });
+      setAiResultIds(result.ids);
+      setAiSummary(result.summary);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      setAiSummary("Sorry, AI search is unavailable right now.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleToggleAiMode = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAiMode((m) => !m);
+    setAiResultIds(null);
+    setAiSummary(null);
+    setAiQuery("");
   };
 
   const topPaddingIOS = Platform.OS === "web" ? 67 : insets.top;
@@ -128,29 +183,59 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.searchRow}>
-        <View style={styles.searchWrapper}>
-          <Feather name="search" size={18} color={C.textTertiary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search services, providers..."
-            placeholderTextColor={C.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            onFocus={handleSearchPress}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} style={styles.clearBtn}>
-              <Ionicons name="close-circle" size={18} color={C.textTertiary} />
-            </Pressable>
-          )}
-        </View>
+        {aiMode ? (
+          <View style={[styles.searchWrapper, styles.aiSearchWrapper]}>
+            <Ionicons name="sparkles" size={16} color="#7C3AED" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Ask AI: need plumber this weekend..."
+              placeholderTextColor="#A78BFA"
+              value={aiQuery}
+              onChangeText={setAiQuery}
+              onSubmitEditing={handleAISearch}
+              returnKeyType="search"
+              autoFocus
+            />
+            {aiLoading ? (
+              <ActivityIndicator size="small" color="#7C3AED" style={{ marginRight: 10 }} />
+            ) : aiQuery.length > 0 ? (
+              <Pressable onPress={handleAISearch} style={styles.clearBtn}>
+                <Ionicons name="arrow-forward-circle" size={20} color="#7C3AED" />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.searchWrapper}>
+            <Feather name="search" size={18} color={C.textTertiary} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search services, providers..."
+              placeholderTextColor={C.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+              onFocus={handleSearchPress}
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch("")} style={styles.clearBtn}>
+                <Ionicons name="close-circle" size={18} color={C.textTertiary} />
+              </Pressable>
+            )}
+          </View>
+        )}
         <Pressable
-          style={styles.mapBtn}
-          onPress={() => router.push("/(tabs)/map")}
+          style={[styles.mapBtn, aiMode && styles.mapBtnAi]}
+          onPress={handleToggleAiMode}
         >
-          <Ionicons name="map-outline" size={22} color={C.primary} />
+          <Ionicons name="sparkles" size={20} color={aiMode ? "#fff" : "#7C3AED"} />
         </Pressable>
       </View>
+
+      {aiSummary && (
+        <View style={styles.aiSummaryBanner}>
+          <Ionicons name="sparkles" size={14} color="#7C3AED" />
+          <Text style={styles.aiSummaryText}>{aiSummary}</Text>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -186,7 +271,27 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
 
-      {search.length > 0 ? (
+      {aiResults ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              AI found {aiResults.length} match{aiResults.length !== 1 ? "es" : ""}
+            </Text>
+            <Pressable onPress={() => { setAiResultIds(null); setAiSummary(null); setAiQuery(""); }}>
+              <Text style={styles.seeAll}>Clear</Text>
+            </Pressable>
+          </View>
+          {aiResults.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={48} color={C.textTertiary} />
+              <Text style={styles.emptyTitle}>No matching services</Text>
+              <Text style={styles.emptyDesc}>Try a different search query</Text>
+            </View>
+          ) : (
+            aiResults.map((l) => <ServiceCard key={l.id} listing={l} />)
+          )}
+        </>
+      ) : search.length > 0 ? (
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -387,5 +492,49 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
+  },
+  aiSearchWrapper: {
+    borderColor: "#7C3AED",
+    backgroundColor: "#FAF5FF",
+  },
+  mapBtnAi: {
+    backgroundColor: "#7C3AED",
+  },
+  aiSummaryBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "#F3E8FF",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  aiSummaryText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#5B21B6",
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  locationBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "#EBF0FA",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  locationText: {
+    flex: 1,
+    fontSize: 12,
+    color: C.primary,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
   },
 });

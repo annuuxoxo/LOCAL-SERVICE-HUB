@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { useApp } from "@/context/AppContext";
 import { ServiceCategory, ServiceListing } from "@/context/AppContext";
+import { api } from "@/lib/api";
 
 const CATEGORIES: { id: ServiceCategory; label: string; icon: string }[] = [
   { id: "tutoring", label: "Tutoring", icon: "book" },
@@ -62,6 +63,10 @@ export default function CreateListingScreen() {
   const [tags, setTags] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [aiDescLoading, setAiDescLoading] = useState(false);
+  const [aiPriceLoading, setAiPriceLoading] = useState(false);
+  const [aiPriceSuggestion, setAiPriceSuggestion] = useState<{ min: number; max: number; suggested: number; unit: string } | null>(null);
+
   const [pinCoord, setPinCoord] = useState<{ latitude: number; longitude: number; name: string } | null>(null);
   const [region, setRegion] = useState<Region>({
     latitude: userLocation?.latitude ?? MUMBAI_DEFAULT.latitude,
@@ -94,6 +99,54 @@ export default function CreateListingScreen() {
     if (!coord) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPinCoord({ latitude: coord.latitude, longitude: coord.longitude, name: "Custom Pin" });
+  };
+
+  const handleAIDescription = async () => {
+    if (!title.trim()) {
+      Alert.alert("Title Required", "Please enter a listing title first so AI can generate a description.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAiDescLoading(true);
+    try {
+      const result = await api.ai.generateDescription({
+        title: title.trim(),
+        category,
+        price: parseFloat(price) || 0,
+        priceType,
+        location: pinCoord?.name ?? "Mumbai",
+        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      setDescription(result.description);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("AI Error", "Could not generate description. Please try again.");
+    } finally {
+      setAiDescLoading(false);
+    }
+  };
+
+  const handleAIPrice = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setAiPriceLoading(true);
+    setAiPriceSuggestion(null);
+    try {
+      const result = await api.ai.suggestPrice({
+        category,
+        location: pinCoord?.name ?? "Mulund, Mumbai",
+      });
+      setAiPriceSuggestion(result);
+      if (result.suggested) {
+        setPrice(String(result.suggested));
+        if (result.unit?.includes("hour")) setPriceType("hourly");
+        else if (result.unit?.includes("session") || result.unit?.includes("fixed")) setPriceType("fixed");
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("AI Error", "Could not suggest a price. Please try again.");
+    } finally {
+      setAiPriceLoading(false);
+    }
   };
 
   const handleSelectArea = (area: typeof MUMBAI_AREAS[0]) => {
@@ -202,7 +255,23 @@ export default function CreateListingScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Description *</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Description *</Text>
+            <Pressable
+              style={[styles.aiBtn, aiDescLoading && styles.aiBtnLoading]}
+              onPress={handleAIDescription}
+              disabled={aiDescLoading}
+            >
+              {aiDescLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles" size={13} color="#fff" />
+                  <Text style={styles.aiBtnText}>Write with AI</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Describe your service, experience, and what makes you unique..."
@@ -218,7 +287,31 @@ export default function CreateListingScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Price *</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Price *</Text>
+            <Pressable
+              style={[styles.aiBtn, aiPriceLoading && styles.aiBtnLoading]}
+              onPress={handleAIPrice}
+              disabled={aiPriceLoading}
+            >
+              {aiPriceLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="sparkles" size={13} color="#fff" />
+                  <Text style={styles.aiBtnText}>Suggest Price</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+          {aiPriceSuggestion && (
+            <View style={styles.priceSuggestion}>
+              <Ionicons name="sparkles" size={13} color="#7C3AED" />
+              <Text style={styles.priceSuggestionText}>
+                AI suggests ₹{aiPriceSuggestion.min}–₹{aiPriceSuggestion.max} {aiPriceSuggestion.unit} for {category} in this area
+              </Text>
+            </View>
+          )}
           <View style={styles.priceRow}>
             <View style={styles.priceInputWrapper}>
               <Text style={styles.currencySign}>₹</Text>
@@ -546,6 +639,45 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   areaChipLabelActive: { color: "#fff" },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  aiBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#7C3AED",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  aiBtnLoading: { opacity: 0.7, minWidth: 90, justifyContent: "center" },
+  aiBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+    fontFamily: "Inter_700Bold",
+  },
+  priceSuggestion: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F3E8FF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  priceSuggestionText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#5B21B6",
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+  },
   daysRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dayChip: {
     width: 48,

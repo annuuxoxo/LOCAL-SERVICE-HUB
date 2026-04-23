@@ -135,4 +135,46 @@ export const api = {
     markAllRead: () =>
       request<any>("/notifications/read-all", { method: "PATCH" }),
   },
+
+  ai: {
+    generateDescription: (data: {
+      title: string;
+      category: string;
+      price: number;
+      priceType: "hourly" | "fixed" | "negotiable";
+      location?: string;
+      tags?: string[];
+    }) =>
+      request<{ description: string }>("/ai/generate-description", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }, false),
+
+    suggestPrice: (data: { category: string; location?: string }) =>
+      request<{ min: number; max: number; suggested: number; unit: string }>(
+        "/ai/suggest-price",
+        { method: "POST", body: JSON.stringify(data) },
+        false
+      ),
+
+    smartSearch: (data: {
+      query: string;
+      listings: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        price: number;
+        priceType: string;
+        location: string;
+        providerName: string;
+        providerRating: number;
+        distance?: number;
+      }>;
+    }) =>
+      request<{ ids: string[]; summary: string }>("/ai/smart-search", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }, false),
+  },
 };
